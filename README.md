@@ -22,21 +22,28 @@ Find actors who have shared the screen with both Nicolas Cage and Keanu Reeves â
 
 ## Setup
 
-1. Clone the repo and install dependencies:
+1. Clone the repo:
+
+```bash
+git clone https://github.com/ob-1000/caged-with-reeves.git
+cd caged-with-reeves
+```
+
+2. Install dependencies:
 
 ```bash
 npm install
 ```
 
-2. Create a `.env` file at the project root and add your TMDB API key:
+3. Create a `.env` file at the project root. A `.env.example` is included as a template:
 
 ```
-VITE_TMDB_API_KEY=your_key_here
+VITE_TMDB_API_KEY=your_bearer_token_here
 ```
 
-You can get a free API key at [themoviedb.org](https://www.themoviedb.org/settings/api).
+You'll need a free TMDB account to generate a Read Access Token at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). Use the **API Read Access Token** (the long Bearer token), not the short API key.
 
-3. Start the dev server:
+4. Start the dev server:
 
 ```bash
 npm run dev
