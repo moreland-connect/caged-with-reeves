@@ -1,15 +1,17 @@
 const TMDB_URL = 'https://www.themoviedb.org/movie'
 
-export default function MoviePanel({ actor, cage, reeves, onClose }) {
+// sort movies by star that was acted with. 
+
+export default function MoviePanel({ actor, star1, star2, onClose }) {
   return (
     <div className="movie-panel">
       <button className="panel-close" onClick={onClose}>✕</button>
       <h2 className="panel-actor">{actor.name}</h2>
       <div className="panel-columns">
         <div className="panel-column">
-          <h3>With {cage.name}</h3>
+          <h3>With {star1.name}</h3>
           <ul>
-            {[...actor.cageMovies].sort((a, b) => a.title.localeCompare(b.title)).map(m => (
+            {[...actor.star1Movies].sort((a, b) => a.title.localeCompare(b.title)).map(m => (
               <li key={m.id}>
                 <a href={`${TMDB_URL}/${m.id}`} target="_blank" rel="noreferrer">
                   {m.title}
@@ -19,9 +21,9 @@ export default function MoviePanel({ actor, cage, reeves, onClose }) {
           </ul>
         </div>
         <div className="panel-column">
-          <h3>With {reeves.name}</h3>
+          <h3>With {star2.name}</h3>
           <ul>
-            {[...actor.reevesMovies].sort((a, b) => a.title.localeCompare(b.title)).map(m => (
+            {[...actor.star2Movies].sort((a, b) => a.title.localeCompare(b.title)).map(m => (
               <li key={m.id}>
                 <a href={`${TMDB_URL}/${m.id}`} target="_blank" rel="noreferrer">
                   {m.title}

@@ -1,5 +1,7 @@
 const IMG_BASE = 'https://image.tmdb.org/t/p/w185'
 
+// displays actor name and profile picture
+
 export default function ActorCard({ actor, isSelected, onSelect }) {
   return (
     <div

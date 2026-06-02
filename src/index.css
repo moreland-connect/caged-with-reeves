@@ -1,6 +1,7 @@
 :root {
   --bg: #0f0f0f;
   --surface: #1a1a1a;
+  --surface-hover: #222;
   --border: #2a2a2a;
   --text: #e0e0e0;
   --text-muted: #888;
@@ -49,12 +50,27 @@ body {
   font-size: 0.9rem;
 }
 
+.loading-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 0;
+}
+
 .error-screen {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  padding: 60px 0;
   color: #e05555;
+}
+
+.no-results {
+  text-align: center;
+  color: var(--text-muted);
+  margin-top: 40px;
+  font-size: 1rem;
 }
 
 /* App */
@@ -72,6 +88,122 @@ body {
   letter-spacing: -0.5px;
   color: var(--accent);
   margin-bottom: 32px;
+}
+
+/* Search form */
+
+.search-form {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.search-divider {
+  font-size: 1.5rem;
+  color: var(--accent);
+  padding-bottom: 10px;
+}
+
+.search-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 0 24px;
+  height: 42px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Actor search autocomplete */
+
+.actor-search {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 240px;
+}
+
+.actor-search label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.actor-search input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+  padding: 8px 12px;
+  width: 100%;
+  outline: none;
+  height: 42px;
+}
+
+.actor-search input:focus {
+  border-color: var(--accent);
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  list-style: none;
+  margin-top: 4px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.suggestions li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.suggestions li:hover {
+  background: var(--surface-hover);
+}
+
+.suggestions li img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.suggestion-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.suggestions li span {
+  font-size: 0.9rem;
 }
 
 /* Star header */
