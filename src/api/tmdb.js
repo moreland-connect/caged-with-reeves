@@ -2,14 +2,14 @@ const BASE_URL = 'https://api.themoviedb.org/3'
 
 const headers = {
   Authorization: `Bearer ${import.meta.env.VITE_TMDB_API_KEY}`,
-  'Content-Type': 'application/json',
 }
 
 async function tmdbFetch(path, attempt = 0) {
   const res = await fetch(`${BASE_URL}${path}`, { headers })
   if (res.status === 429) {
-    if (attempt >= 4) throw new Error(`TMDB rate limit exceeded: ${path}`)
-    const delay = Math.pow(2, attempt) * 1000
+    if (attempt >= 6) throw new Error(`TMDB rate limit exceeded after retries: ${path}`)
+    const retryAfter = res.headers.get('Retry-After')
+    const delay = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000
     await new Promise(r => setTimeout(r, delay))
     return tmdbFetch(path, attempt + 1)
   }
@@ -19,24 +19,25 @@ async function tmdbFetch(path, attempt = 0) {
 
 export async function getPerson(name) {
   const data = await tmdbFetch(`/search/person?query=${encodeURIComponent(name)}`)
-  const p = data.results[0]
+  const p = data.results?.[0]
+  if (!p) throw new Error(`No TMDB results for "${name}"`)
   return { id: p.id, name: p.name, profile_path: p.profile_path }
 }
 
 async function getMovieCredits(personId) {
   const data = await tmdbFetch(`/person/${personId}/movie_credits`)
-  return data.cast.map(m => ({ id: m.id, title: m.title }))
+  return data.cast.map(m => ({ id: m.id, title: m.title, poster_path: m.poster_path }))
 }
 
 async function getMovieCast(movieId) {
   const data = await tmdbFetch(`/movie/${movieId}/credits`)
-  return data.cast
+  return data.cast ?? []
 }
 
 async function buildCoStarSet(personId, personName, onProgress) {
   const movies = await getMovieCredits(personId)
-  const CHUNK_SIZE = 8
-  const CHUNK_DELAY = 400
+  const CHUNK_SIZE = 6
+  const CHUNK_DELAY = 550
   const totalChunks = Math.ceil(movies.length / CHUNK_SIZE)
   const allCasts = []
 
@@ -56,14 +57,14 @@ async function buildCoStarSet(personId, personName, onProgress) {
     for (const actor of cast) {
       if (actor.id === personId) continue
       if (coStars.has(actor.id)) {
-        coStars.get(actor.id).movies.push({ id: movie.id, title: movie.title })
+        coStars.get(actor.id).movies.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path })
       } else {
         coStars.set(actor.id, {
           id: actor.id,
           name: actor.name,
           profile_path: actor.profile_path,
           popularity: actor.popularity,
-          movies: [{ id: movie.id, title: movie.title }],
+          movies: [{ id: movie.id, title: movie.title, poster_path: movie.poster_path }],
         })
       }
     }
