@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { findSharedActors } from './api/tmdb'
+import { findSharedActors } from './service/tmdb'
 import StarHeader from './components/StarHeader'
 import ResultsList from './components/ResultsList'
 import MoviePanel from './components/MoviePanel'
