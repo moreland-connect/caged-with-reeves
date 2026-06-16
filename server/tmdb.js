@@ -19,11 +19,29 @@ async function tmdbFetch(path, attempt = 0) {
   return res.json()
 }
 
-async function getPerson(name) {
-  const data = await tmdbFetch(`/search/person?query=${encodeURIComponent(name)}`)
-  const p = data.results?.[0]
-  if (!p) throw new Error(`No TMDB results for "${name}"`)
+export async function getPersonById(id) {
+  const p = await tmdbFetch(`/person/${id}`)
   return { id: p.id, name: p.name, profile_path: p.profile_path }
+}
+
+function nameMatchesQuery(name, query) {
+  const nameLower = name.toLowerCase()
+  const q = query.trim().toLowerCase()
+  // Full name starts with the query (handles "Brad Pitt" → "Brad Pitt")
+  if (nameLower.startsWith(q)) return true
+  // Every word in the query matches the start of some word in the name
+  const queryWords = q.split(/\s+/)
+  const nameWords = nameLower.split(/\s+/)
+  return queryWords.every(qw => nameWords.some(nw => nw.startsWith(qw)))
+}
+
+export async function searchPersons(query) {
+  const data = await tmdbFetch(`/search/person?query=${encodeURIComponent(query)}`)
+  return data.results
+    .filter(p => nameMatchesQuery(p.name, query))
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, 5)
+    .map(p => ({ id: p.id, name: p.name, profile_path: p.profile_path }))
 }
 
 async function getMovieCredits(personId) {
@@ -75,34 +93,34 @@ async function buildCoStarSet(personId, personName, onProgress) {
   return coStars
 }
 
-export async function findSharedActors(onProgress) {
-  const [cage, reeves] = await Promise.all([
-    getPerson('Nicolas Cage'),
-    getPerson('Keanu Reeves'),
+export async function findSharedActors(star1Id, star2Id, onProgress) {
+  const [star1, star2] = await Promise.all([
+    getPersonById(star1Id),
+    getPersonById(star2Id),
   ])
 
-  const [cageCoStars, reevesCoStars] = await Promise.all([
-    buildCoStarSet(cage.id, cage.name, onProgress),
-    buildCoStarSet(reeves.id, reeves.name, onProgress),
+  const [star1CoStars, star2CoStars] = await Promise.all([
+    buildCoStarSet(star1.id, star1.name, onProgress),
+    buildCoStarSet(star2.id, star2.name, onProgress),
   ])
 
   const shared = []
-  for (const [id, actor] of cageCoStars) {
-    if (id === reeves.id) continue
-    if (!reevesCoStars.has(id)) continue
+  for (const [id, actor] of star1CoStars) {
+    if (id === star2.id) continue
+    if (!star2CoStars.has(id)) continue
     shared.push({
       id: actor.id,
       name: actor.name,
       profile_path: actor.profile_path,
       popularity: actor.popularity,
-      cageMovies: actor.movies,
-      reevesMovies: reevesCoStars.get(id).movies,
+      star1Movies: actor.movies,
+      star2Movies: star2CoStars.get(id).movies,
     })
   }
 
   return {
-    cage,
-    reeves,
+    star1,
+    star2,
     actors: shared.sort((a, b) => b.popularity - a.popularity),
   }
 }

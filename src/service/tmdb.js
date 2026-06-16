@@ -1,6 +1,14 @@
-export function findSharedActors(onProgress) {
-  return new Promise((resolve, reject) => {
-    const es = new EventSource('/api/shared-actors')
+export async function searchPersons(query) {
+  if (!query?.trim()) return []
+  const res = await fetch(`/api/search-person?query=${encodeURIComponent(query)}`)
+  if (!res.ok) throw new Error('Search failed')
+  return res.json()
+}
+
+export function findSharedActors(star1Id, star2Id, onProgress) {
+  let es = null
+  const promise = new Promise((resolve, reject) => {
+    es = new EventSource(`/api/shared-actors?star1Id=${star1Id}&star2Id=${star2Id}`)
 
     es.onmessage = (event) => {
       const msg = JSON.parse(event.data)
@@ -20,4 +28,6 @@ export function findSharedActors(onProgress) {
       reject(new Error('Connection to server lost'))
     }
   })
+
+  return { promise, cancel: () => es?.close() }
 }

@@ -1,65 +1,28 @@
-# Caged with Reeves
+# Caged with Reeves v2.0
 
-Find actors who have shared the screen with both Nicolas Cage and Keanu Reeves — not necessarily in the same film, but at least once with each.
+Find actors who have appeared in films with **both** Nicolas Cage and Keanu Reeves — not necessarily the same film, but at least once with each. Search any two actors to find their shared connections, sorted by popularity.
 
-## How it works
+## Prerequisites
 
-An Express server handles all TMDB API communication so the API key never reaches the browser. The client connects to a single SSE endpoint and receives progress updates while the server works, then the final result when processing is complete.
+The following must be installed on your machine before you begin:
 
-The server runs a four-step pipeline:
-
-1. **Resolve names to IDs** — searches for Nicolas Cage and Keanu Reeves by name to retrieve their TMDB person IDs. Both lookups run in parallel.
-
-2. **Fetch movie credits** — for each star, retrieves every film they appear in as a cast member. This gives a list of movie IDs to query.
-
-3. **Fetch cast lists** — for each of those movies, fetches the full cast. Requests are batched in chunks of 6 with a 550ms pause between batches to stay within TMDB's rate limits. Both stars' filmographies are processed in parallel.
-
-4. **Compute the intersection** — once all cast data is in memory, the server builds a co-star map for each star (actor ID → movies they appeared in together). It then walks Cage's co-star map and checks each entry against Reeves's co-star map. Actors present in both are collected into the final results list, sorted by TMDB popularity score.
-
-## Data fetching
-
-### Rate limit handling
-
-TMDB enforces a request rate limit. The app handles this in two ways:
-
-- **Chunked batching**: rather than firing all cast requests simultaneously, the server processes movies in groups of 6, waiting 550ms between each group.
-- **Exponential backoff**: if a request returns a `429 Too Many Requests` response, it retries automatically with increasing delays (1s, 2s, 4s, 8s) before giving up after six attempts.
-
-### Endpoints
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /search/person?query={name}` | Resolves an actor's name to their TMDB person ID and profile image path. The app takes the first result. |
-| `GET /person/{id}/movie_credits` | Returns every film a person has a cast credit on. Used to build the list of movies to scan for each star. |
-| `GET /movie/{id}/credits` | Returns the full cast and crew for a specific film. The app uses only the cast array, extracting each actor's ID, name, profile image, and popularity score. |
-
-### Volume
-
-Nicolas Cage and Keanu Reeves each have a large number of film credits, which means the app sends a significant number of requests on load — typically several hundred across both filmographies. The chunked batching strategy keeps this from saturating the API, but the initial load takes around 30–60 seconds depending on connection speed and TMDB response times.
-
-## UI
-
-- Nicolas Cage and Keanu Reeves are shown at the top with their TMDB profile photos
-- Matching actors are displayed in a grid below, ordered by popularity
-- Clicking an actor opens a side panel listing which films connect them to each star
-- Clicking a film title opens that film's page on themoviedb.org
-
-## Tech stack
-
-- React (via Vite)
-- Express (Node.js API server)
-- TMDB API
+- **Node.js** v18 or higher — required for native `fetch` support ([nodejs.org](https://nodejs.org))
+- **npm** — included with Node.js
+- **TMDB API key** — a free Read Access Token from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). Use the long **API Read Access Token** (Bearer token), not the short API key.
 
 ## Setup
 
-1. Create a `.env` file at the project root. A `.env.example` is included as a template:
+1. Copy the example env file and add your token:
 
+```bash
+cp .env.example .env
+```
+
+`.env`:
 ```
 TMDB_API_KEY=your_bearer_token_here
 PORT=3001
 ```
-
-You'll need a free TMDB account to generate a Read Access Token at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). Use the **API Read Access Token** (the long Bearer token), not the short API key.
 
 2. Install dependencies:
 
@@ -67,17 +30,21 @@ You'll need a free TMDB account to generate a Read Access Token at [themoviedb.o
 npm install
 ```
 
-3. Start both servers (two terminals):
+## Running the App
+
+Start both servers in separate terminals:
 
 ```bash
 # Terminal 1 — Express API server
 npm run dev:server
 
-# Terminal 2 — Vite dev server (proxies /api to localhost:3001)
+# Terminal 2 — Vite dev server
 npm run dev
 ```
 
-### Production
+Then open [http://localhost:5173](http://localhost:5173).
+
+### Production build
 
 ```bash
 npm run build
@@ -86,9 +53,52 @@ npm start
 
 `npm start` runs the Express server which serves both the API and the compiled React app from `dist/`.
 
-## Notes
+---
 
-- Only movie credits are considered — TV appearances are excluded
-- The TMDB API key lives only on the server and is never bundled into the client JavaScript
-- No results are cached between sessions — each page load triggers a fresh pipeline run
-- Actors who appear in both a Cage film and a Reeves film via separate movies are included, even if those films share no other connection
+## API Endpoints
+
+All endpoints are served by the Express server on port `3001` (proxied through Vite in development).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/search-person?query={name}` | Searches TMDB for actors whose name starts with the query. Returns up to 5 results sorted by popularity. |
+| `GET` | `/api/person/:id` | Returns a single person's name and profile image by their TMDB person ID. |
+| `GET` | `/api/shared-actors?star1Id={id}&star2Id={id}` | **SSE.** Streams progress updates while computing shared co-stars, then emits the final result. |
+
+### SSE event types (`/api/shared-actors`)
+
+| Event type | Payload |
+|------------|---------|
+| `progress` | `{ message: string }` — status update while scanning filmographies |
+| `result` | `{ star1, star2, actors[] }` — final payload when complete |
+| `error` | `{ message: string }` — unrecoverable failure |
+
+---
+
+## How It Works
+
+The server runs a four-step pipeline per request:
+
+1. **Resolve IDs** — fetches both stars' TMDB profiles in parallel.
+2. **Fetch movie credits** — retrieves every film each star appears in as a cast member.
+3. **Fetch cast lists** — for each of those films, fetches the full cast. Requests run in chunks of 6 with a 550ms pause between batches to stay within TMDB rate limits. Both stars are processed in parallel.
+4. **Intersect** — builds a co-star map for each star, then finds actors present in both. Results are sorted by TMDB popularity score.
+
+---
+
+## Dev Notes
+
+### Rate limit handling
+
+- **Chunked batching** — cast requests are batched in groups of 6 with a 550ms delay between chunks.
+- **Exponential backoff** — `429` responses trigger automatic retries with increasing delays (1s → 2s → 4s → 8s), up to 6 attempts.
+
+### Request volume
+
+Each star's filmography typically spans several hundred movies combined, meaning the initial load sends a large number of TMDB requests. Expect **30–60 seconds** for the first result.
+
+### Other notes
+
+- Only movie credits are scanned — TV appearances are excluded.
+- The TMDB API key lives only on the server and is never bundled into the client.
+- No results are cached — each search triggers a fresh pipeline run.

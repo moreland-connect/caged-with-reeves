@@ -15,9 +15,9 @@ function MovieEntry({ movie }) {
   )
 }
 
-export default function MoviePanel({ actor, cage, reeves, onClose }) {
-  const sortedCage = [...actor.cageMovies].sort((a, b) => a.title.localeCompare(b.title))
-  const sortedReeves = [...actor.reevesMovies].sort((a, b) => a.title.localeCompare(b.title))
+export default function MoviePanel({ actor, star1, star2, onClose }) {
+  const sortedStar1 = [...actor.star1Movies].sort((a, b) => a.title.localeCompare(b.title))
+  const sortedStar2 = [...actor.star2Movies].sort((a, b) => a.title.localeCompare(b.title))
 
   return (
     <div className="movie-panel">
@@ -25,12 +25,12 @@ export default function MoviePanel({ actor, cage, reeves, onClose }) {
       <h2 className="panel-actor">{actor.name}</h2>
       <div className="panel-columns">
         <div className="panel-column">
-          <h3>With {cage.name}</h3>
-          <ul>{sortedCage.map(m => <MovieEntry key={m.id} movie={m} />)}</ul>
+          <h3>With {star1.name}</h3>
+          <ul>{sortedStar1.map(m => <MovieEntry key={m.id} movie={m} />)}</ul>
         </div>
         <div className="panel-column">
-          <h3>With {reeves.name}</h3>
-          <ul>{sortedReeves.map(m => <MovieEntry key={m.id} movie={m} />)}</ul>
+          <h3>With {star2.name}</h3>
+          <ul>{sortedStar2.map(m => <MovieEntry key={m.id} movie={m} />)}</ul>
         </div>
       </div>
     </div>
