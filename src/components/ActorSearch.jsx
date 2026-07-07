@@ -3,7 +3,7 @@ import { searchPersons } from '../service/tmdb'
 
 const IMG_BASE = 'https://image.tmdb.org/t/p/w45'
 
-export default function ActorSearch({ label, value, onChange, disabledId }) {
+export default function ActorSearch({ label, value, onChange, disabledId, variant = 'a' }) {
   const [inputText, setInputText] = useState(value?.name ?? '')
   const [suggestions, setSuggestions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -104,7 +104,7 @@ export default function ActorSearch({ label, value, onChange, disabledId }) {
   }
 
   return (
-    <div className={`actor-search${value ? ' actor-search--selected' : ''}`} ref={containerRef}>
+    <div className={`actor-search actor-search--${variant}${value ? ' actor-search--selected' : ''}`} ref={containerRef}>
       <input
         className="actor-search-input"
         value={inputText}

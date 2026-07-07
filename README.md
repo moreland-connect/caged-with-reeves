@@ -1,6 +1,8 @@
-# Caged with Reeves v2.0
+# Caged with Reeves presents: The Co-Star Connection v2.5
 
 Find actors who have appeared in films with **both** Nicolas Cage and Keanu Reeves — not necessarily the same film, but at least once with each. Search any two actors to find their shared connections, sorted by popularity.
+
+Results pages have shareable URLs (`/results?star1=ID&star2=ID`) and revisiting the same pair returns instantly from a client-side cache.
 
 ## Prerequisites
 
@@ -75,6 +77,16 @@ All endpoints are served by the Express server on port `3001` (proxied through V
 
 ---
 
+## Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Home page — two CTAs: jump straight to Cage & Reeves, or open the search page |
+| `/search` | Actor search — pick any two actors; navigates to results automatically when both are selected |
+| `/results?star1=ID&star2=ID` | Results — shareable URL; Cage & Reeves IDs are hardcoded client-side so the example loads without an extra API round-trip |
+
+---
+
 ## How It Works
 
 The server runs a four-step pipeline per request:
@@ -101,4 +113,4 @@ Each star's filmography typically spans several hundred movies combined, meaning
 
 - Only movie credits are scanned — TV appearances are excluded.
 - The TMDB API key lives only on the server and is never bundled into the client.
-- No results are cached — each search triggers a fresh pipeline run.
+- Results are cached client-side (in-memory) keyed by actor ID pair — revisiting the same pair within a session returns instantly without re-running the pipeline. The cache resets on page reload.

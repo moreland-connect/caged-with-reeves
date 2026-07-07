@@ -15,16 +15,25 @@ export default function ActorCard({ actor, isSelected, onSelect, star1, star2 })
         <p className="actor-name">{actor.name}</p>
       </div>
       {star1 && star2 && (
-        <div className="actor-tooltip">
-          <div className="actor-tooltip-row">
-            <span className="actor-tooltip-count">{actor.star1Movies.length}</span>
-            <span className="actor-tooltip-label"> with {star1.name}</span>
+        <>
+          <div className="actor-card-footer">
+            <div className="actor-badges">
+              <span className="actor-badge actor-badge--a">A</span>
+              <span className="actor-badge actor-badge--b">B</span>
+            </div>
+            <span className="actor-film-count">★ {actor.star1Movies.length + actor.star2Movies.length}</span>
           </div>
-          <div className="actor-tooltip-row">
-            <span className="actor-tooltip-count">{actor.star2Movies.length}</span>
-            <span className="actor-tooltip-label"> with {star2.name}</span>
+          <div className="actor-tooltip">
+            <div className="actor-tooltip-row">
+              <span className="actor-tooltip-count actor-tooltip-count--a">{actor.star1Movies.length}</span>
+              <span className="actor-tooltip-label"> with {star1.name}</span>
+            </div>
+            <div className="actor-tooltip-row">
+              <span className="actor-tooltip-count actor-tooltip-count--b">{actor.star2Movies.length}</span>
+              <span className="actor-tooltip-label"> with {star2.name}</span>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

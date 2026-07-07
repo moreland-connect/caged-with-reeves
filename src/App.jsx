@@ -5,10 +5,27 @@ import ResultsList from './components/ResultsList'
 import MoviePanel from './components/MoviePanel'
 import ActorSearch from './components/ActorSearch'
 import './index.css'
+import { Routes, Route } from 'react-router-dom'
+import Home from './routes/Home'
+import Search from './routes/Search'
+import Results from './routes/Results'
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/search" element={<Search />} />
+      <Route path="/results" element={<Results />} />
+    </Routes>
+  )
+}
+
+
 
 const CAGE_ID = 2963
 const REEVES_ID = 6384
 
+/*
 export default function App() {
   const [star1, setStar1] = useState(null)
   const [star2, setStar2] = useState(null)
@@ -149,3 +166,4 @@ export default function App() {
     </>
   )
 }
+*/

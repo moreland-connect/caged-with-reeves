@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A React app that finds actors who have appeared in films with **any two chosen actors** (not necessarily the same film). Defaults to Nicolas Cage and Keanu Reeves on load. Processing runs server-side via an Express backend that proxies the TMDB API and streams progress to the client.
+A React app that finds actors who have appeared in films with **any two chosen actors** (not necessarily the same film). Defaults to Nicolas Cage and Keanu Reeves via the home page CTA. Processing runs server-side via an Express backend that proxies the TMDB API and streams progress to the client.
 
 ## Project Rules
 
@@ -54,17 +54,13 @@ Run `dev:server` and `dev` in separate terminals for local development. No test 
 ### Client (`src/`)
 
 - `src/service/tmdb.js` — two functions: `searchPersons(query)` and `findSharedActors(star1Id, star2Id, onProgress)`. The latter returns `{ promise, cancel }` and consumes the SSE stream.
-- `App.jsx` — all state; pre-populates Cage (ID 2963) + Reeves (ID 6384) on mount; triggers computation automatically when both stars are set and distinct
+- `src/service/resultsCache.js` — in-memory `Map` keyed by `star1Id-star2Id`; `getCached` / `setCached`. Resets on page reload.
+- `App.jsx` — just a `<Routes>` switcher; all state lives in the route components
 
-**App state:**
-```
-star1, star2       — selected actor objects
-phase              — 'selecting' | 'loading' | 'results' | 'error'
-actors             — shared co-star array
-loadingMsg         — latest progress string from SSE
-error              — error message string
-selected           — actorId of the open side panel (null = closed)
-```
+**Routes (`src/routes/`):**
+- `Home.jsx` — two CTAs: "Try it: Cage & Reeves" (navigates to `/results?star1=2963&star2=6384`) and "Search actors"
+- `Search.jsx` — two `ActorSearch` inputs; navigates to `/results` automatically when both are selected and distinct; shows a back button to either home or the previous results page (passed via router state)
+- `Results.jsx` — reads `star1Id`/`star2Id` from query params; fetches actor display data and runs the SSE pipeline; checks the cache before starting a new computation; all phase state (`loading` / `results` / `error`) lives here
 
 **Component tree:**
 - `ActorSearch.jsx` — autocomplete input with 300ms debounce, keyboard nav, clear button; `disabledId` prop prevents picking the same actor twice
@@ -80,7 +76,19 @@ selected           — actorId of the open side panel (null = closed)
 
 ## Key Facts
 
-- The two stars are **not hardcoded** — users can search and select any two actors via `ActorSearch`
-- Cage + Reeves are only defaults fetched on mount; changing either triggers a new computation automatically
+- The two stars are **not hardcoded** — users can search any two actors via `ActorSearch`
+- Cage + Reeves are the default example but any pair works; results URLs are shareable (`/results?star1=ID&star2=ID`)
 - TMDB API key is **server-side only** — not exposed to the browser
-- No state management library; all state lives in `App.jsx` via React hooks
+- No state management library; all state lives in the route components via React hooks
+- Client-side result cache: revisiting the same pair within a session skips the SSE pipeline entirely
+
+## Roadmap / Future Ideas
+
+Ideas discussed but intentionally deferred — pick these up in future versions:
+
+### Coming Soon
+- **Unit tests** (Vitest already installed): Priority targets are `nameMatchesQuery` in `server/tmdb.js` (pure function), the SSE client in `src/service/tmdb.js` (mock EventSource), and `ActorSearch.jsx` debounce/keyboard behavior.
+
+### Future Versions
+- **Early fetching**: Start fetching star1's full filmography the moment the user selects actor 1. By the time actor 2 is chosen, the server has a head start — could cut total wait time nearly in half. Requires a server-side in-memory cache keyed by actor ID.
+- **Drag to replace**: Let users drag an actor card from the results list into the `StarHeader` to swap out one of the two stars and kick off a new search. Actor IDs and names are already present on each card.
