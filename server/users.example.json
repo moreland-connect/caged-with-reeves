@@ -1,0 +1,6 @@
+[
+  {
+    "username": "changeme",
+    "passwordHash": "REPLACE_WITH_OUTPUT_OF_node_server/scripts/hash-password.js_<password>"
+  }
+]

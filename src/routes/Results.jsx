@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { findSharedActors } from '../service/tmdb'
 import { getCached, setCached } from '../service/resultsCache'
+import { getFavorites, addFavorite, removeFavorite } from '../service/favorites'
 import StarHeader from '../components/StarHeader'
 import ResultsList from '../components/ResultsList'
 import MoviePanel from '../components/MoviePanel'
@@ -20,12 +21,40 @@ export default function Results() {
   const [loadingMsg, setLoadingMsg] = useState('Connecting to TMDB...')
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
+  const [favorites, setFavorites] = useState([])
+  const [favoriteBusy, setFavoriteBusy] = useState(false)
 
   useEffect(() => {
     if (!star1Id || !star2Id || star1Id === star2Id) {
       navigate('/')
     }
   }, [])
+
+  useEffect(() => {
+    getFavorites().then(({ favorites: favs }) => setFavorites(favs)).catch(() => {})
+  }, [])
+
+  const isFavorite = favorites.some(f =>
+    (f.star1Id === star1Id && f.star2Id === star2Id) ||
+    (f.star1Id === star2Id && f.star2Id === star1Id)
+  )
+
+  async function toggleFavorite() {
+    setFavoriteBusy(true)
+    try {
+      if (isFavorite) {
+        const { favorites: updated } = await removeFavorite(star1Id, star2Id)
+        setFavorites(updated)
+      } else {
+        const { favorites: updated } = await addFavorite(star1Id, star2Id)
+        setFavorites(updated)
+      }
+    } catch {
+      // leave favorite state unchanged on failure
+    } finally {
+      setFavoriteBusy(false)
+    }
+  }
 
   // Fetch actor objects for display (runs in parallel with SSE below)
   useEffect(() => {
@@ -105,9 +134,18 @@ export default function Results() {
             <button className="app-nav-brand app-nav-brand--btn" onClick={() => navigate('/')}>The Co-Star Connection</button>
             <span className="app-nav-version">v2.5</span>
           </div>
-          <button className="search-new-pair-btn" onClick={() => navigate('/search', { state: { star1, star2 } })}>
-            Search New Pair
-          </button>
+          <div className="app-nav-right">
+            <button
+              className={`favorite-btn${isFavorite ? ' favorite-btn--active' : ''}`}
+              onClick={toggleFavorite}
+              disabled={favoriteBusy}
+            >
+              {isFavorite ? '★ Favorited' : '☆ Save as Favorite'}
+            </button>
+            <button className="search-new-pair-btn" onClick={() => navigate('/search', { state: { star1, star2 } })}>
+              Search New Pair
+            </button>
+          </div>
         </div>
       </nav>
       <div className="app">
