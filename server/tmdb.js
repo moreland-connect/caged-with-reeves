@@ -24,7 +24,7 @@ export async function getPersonById(id) {
   return { id: p.id, name: p.name, profile_path: p.profile_path }
 }
 
-function nameMatchesQuery(name, query) {
+export function nameMatchesQuery(name, query) {
   const nameLower = name.toLowerCase()
   const q = query.trim().toLowerCase()
   // Full name starts with the query (handles "Brad Pitt" → "Brad Pitt")
@@ -55,7 +55,7 @@ async function getMovieCast(movieId) {
 }
 
 // Fetches cast for every movie in chunks to avoid hitting TMDB rate limits
-async function buildCoStarSet(personId, personName, onProgress) {
+export async function buildCoStarSet(personId, personName, onProgress) {
   const movies = await getMovieCredits(personId)
   const CHUNK_SIZE = 6
   const CHUNK_DELAY = 550
