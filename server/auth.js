@@ -1,65 +1,62 @@
 import bcrypt from 'bcryptjs'
-import { readFileSync, writeFileSync } from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { eq, and } from 'drizzle-orm'
+import { db } from './db/client.js'
+import { users, favorites } from './db/schema.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const usersPath = path.join(__dirname, 'users.json')
-
-function loadUsers() {
-  return JSON.parse(readFileSync(usersPath, 'utf-8'))
+function normalizePair(star1Id, star2Id) {
+  return star1Id <= star2Id ? [star1Id, star2Id] : [star2Id, star1Id]
 }
 
-function saveUsers(users) {
-  writeFileSync(usersPath, JSON.stringify(users, null, 2))
-}
-
-export function verifyCredentials(username, password) {
-  const user = loadUsers().find(u => u.username === username)
+export async function verifyCredentials(username, password) {
+  const [user] = await db.select().from(users).where(eq(users.username, username))
   if (!user) return false
   return bcrypt.compareSync(password, user.passwordHash)
 }
 
-export function createUser(username, password) {
-  const users = loadUsers()
-  if (users.some(u => u.username === username)) {
+export async function createUser(username, password) {
+  const [existing] = await db.select().from(users).where(eq(users.username, username))
+  if (existing) {
     throw new Error('Username already exists')
   }
-  users.push({ username, passwordHash: bcrypt.hashSync(password, 10) })
-  saveUsers(users)
+  await db.insert(users).values({ username, passwordHash: bcrypt.hashSync(password, 10) })
 }
 
-function sameFavorite(a, b) {
-  return (a.star1Id === b.star1Id && a.star2Id === b.star2Id) ||
-         (a.star1Id === b.star2Id && a.star2Id === b.star1Id)
+async function getUserByUsername(username) {
+  const [user] = await db.select().from(users).where(eq(users.username, username))
+  return user
 }
 
-export function getFavorites(username) {
-  const user = loadUsers().find(u => u.username === username)
-  return user?.favorites ?? []
+async function favoritesForUserId(userId) {
+  const rows = await db.select().from(favorites).where(eq(favorites.userId, userId))
+  return rows.map(({ star1Id, star2Id }) => ({ star1Id, star2Id }))
 }
 
-export function addFavorite(username, star1Id, star2Id) {
-  const users = loadUsers()
-  const user = users.find(u => u.username === username)
+export async function getFavorites(username) {
+  const user = await getUserByUsername(username)
+  if (!user) return []
+  return favoritesForUserId(user.id)
+}
+
+export async function addFavorite(username, star1Id, star2Id) {
+  const user = await getUserByUsername(username)
   if (!user) throw new Error('User not found')
-  if (!user.favorites) user.favorites = []
-  const pair = { star1Id, star2Id }
-  if (!user.favorites.some(f => sameFavorite(f, pair))) {
-    user.favorites.push(pair)
-  }
-  saveUsers(users)
-  return user.favorites
+  const [a, b] = normalizePair(star1Id, star2Id)
+  await db.insert(favorites)
+    .values({ userId: user.id, star1Id: a, star2Id: b })
+    .onConflictDoNothing()
+  return favoritesForUserId(user.id)
 }
 
-export function removeFavorite(username, star1Id, star2Id) {
-  const users = loadUsers()
-  const user = users.find(u => u.username === username)
+export async function removeFavorite(username, star1Id, star2Id) {
+  const user = await getUserByUsername(username)
   if (!user) throw new Error('User not found')
-  const pair = { star1Id, star2Id }
-  user.favorites = (user.favorites ?? []).filter(f => !sameFavorite(f, pair))
-  saveUsers(users)
-  return user.favorites
+  const [a, b] = normalizePair(star1Id, star2Id)
+  await db.delete(favorites).where(and(
+    eq(favorites.userId, user.id),
+    eq(favorites.star1Id, a),
+    eq(favorites.star2Id, b),
+  ))
+  return favoritesForUserId(user.id)
 }
 
 export function requireAuth(req, res, next) {

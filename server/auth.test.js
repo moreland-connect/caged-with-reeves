@@ -1,131 +1,173 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import bcrypt from 'bcryptjs'
 
-vi.mock('fs', () => ({
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-}))
+// Fakes the small slice of the Drizzle query-builder chain auth.js relies on
+// (.from/.where/.values/.onConflictDoNothing all return the same thenable node,
+// which resolves to whatever result was queued for that call).
+const { db, queueResult, resetDb } = vi.hoisted(() => {
+  let queue = []
+  let history = []
 
-import { readFileSync, writeFileSync } from 'fs'
+  function chain(result) {
+    const node = { valuesArgs: undefined }
+    node.from = vi.fn(() => node)
+    node.where = vi.fn(() => node)
+    node.values = vi.fn((v) => { node.valuesArgs = v; return node })
+    node.onConflictDoNothing = vi.fn(() => node)
+    node.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject)
+    return node
+  }
+
+  function next() {
+    const node = chain(queue.shift())
+    history.push(node)
+    return node
+  }
+
+  const db = {
+    select: vi.fn(next),
+    insert: vi.fn(next),
+    delete: vi.fn(next),
+  }
+
+  return {
+    db,
+    queueResult: (result) => queue.push(result),
+    resetDb: () => { queue = []; history = [] },
+  }
+})
+
+vi.mock('./db/client.js', () => ({ db }))
+
 import { verifyCredentials, createUser, getFavorites, addFavorite, removeFavorite, requireAuth } from './auth.js'
 
 const passwordHash = bcrypt.hashSync('correct-password', 10)
 
 afterEach(() => {
   vi.clearAllMocks()
+  resetDb()
 })
 
 describe('verifyCredentials', () => {
-  it('returns true for a known user with the correct password', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(verifyCredentials('liam', 'correct-password')).toBe(true)
+  it('returns true for a known user with the correct password', async () => {
+    queueResult([{ id: 1, username: 'liam', passwordHash }])
+    expect(await verifyCredentials('liam', 'correct-password')).toBe(true)
   })
 
-  it('returns false for a known user with the wrong password', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(verifyCredentials('liam', 'wrong-password')).toBe(false)
+  it('returns false for a known user with the wrong password', async () => {
+    queueResult([{ id: 1, username: 'liam', passwordHash }])
+    expect(await verifyCredentials('liam', 'wrong-password')).toBe(false)
   })
 
-  it('returns false for an unknown username', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(verifyCredentials('someone-else', 'correct-password')).toBe(false)
+  it('returns false for an unknown username', async () => {
+    queueResult([])
+    expect(await verifyCredentials('someone-else', 'correct-password')).toBe(false)
   })
 })
 
 describe('createUser', () => {
-  it('adds a new user with a bcrypt-hashed password', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    createUser('newuser', 'new-password')
+  it('adds a new user with a bcrypt-hashed password', async () => {
+    queueResult([]) // no existing user
+    queueResult(undefined) // insert
+    await createUser('newuser', 'new-password')
 
-    expect(writeFileSync).toHaveBeenCalledTimes(1)
-    const savedUsers = JSON.parse(writeFileSync.mock.calls[0][1])
-    expect(savedUsers).toHaveLength(2)
-    const newUser = savedUsers.find(u => u.username === 'newuser')
-    expect(bcrypt.compareSync('new-password', newUser.passwordHash)).toBe(true)
+    expect(db.insert).toHaveBeenCalledTimes(1)
+    const inserted = db.insert.mock.results[0].value.valuesArgs
+    expect(inserted.username).toBe('newuser')
+    expect(bcrypt.compareSync('new-password', inserted.passwordHash)).toBe(true)
   })
 
-  it('throws and does not write when the username already exists', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(() => createUser('liam', 'whatever')).toThrow('Username already exists')
-    expect(writeFileSync).not.toHaveBeenCalled()
+  it('throws and does not insert when the username already exists', async () => {
+    queueResult([{ id: 1, username: 'liam', passwordHash }])
+    await expect(createUser('liam', 'whatever')).rejects.toThrow('Username already exists')
+    expect(db.insert).not.toHaveBeenCalled()
   })
 })
 
 describe('getFavorites', () => {
-  it('returns an empty array when the user has no favorites', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(getFavorites('liam')).toEqual([])
+  it('returns an empty array when the user has no favorites', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult([])
+    expect(await getFavorites('liam')).toEqual([])
   })
 
-  it('returns the stored favorites', () => {
-    readFileSync.mockReturnValue(JSON.stringify([
-      { username: 'liam', passwordHash, favorites: [{ star1Id: 2963, star2Id: 6384 }] },
-    ]))
-    expect(getFavorites('liam')).toEqual([{ star1Id: 2963, star2Id: 6384 }])
+  it('returns the stored favorites', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult([{ id: 1, userId: 1, star1Id: 2963, star2Id: 6384 }])
+    expect(await getFavorites('liam')).toEqual([{ star1Id: 2963, star2Id: 6384 }])
+  })
+
+  it('returns an empty array when the user does not exist', async () => {
+    queueResult([])
+    expect(await getFavorites('someone-else')).toEqual([])
   })
 })
 
 describe('addFavorite', () => {
-  it('adds a favorite and returns the updated list', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    const result = addFavorite('liam', 2963, 6384)
+  it('adds a favorite and returns the updated list', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult(undefined) // insert
+    queueResult([{ id: 1, userId: 1, star1Id: 2963, star2Id: 6384 }])
+
+    const result = await addFavorite('liam', 2963, 6384)
 
     expect(result).toEqual([{ star1Id: 2963, star2Id: 6384 }])
-    const savedUsers = JSON.parse(writeFileSync.mock.calls[0][1])
-    expect(savedUsers.find(u => u.username === 'liam').favorites).toEqual([{ star1Id: 2963, star2Id: 6384 }])
+    const inserted = db.insert.mock.results[0].value.valuesArgs
+    expect(inserted).toEqual({ userId: 1, star1Id: 2963, star2Id: 6384 })
   })
 
-  it('appends to an existing list rather than replacing it', () => {
-    readFileSync.mockReturnValue(JSON.stringify([
-      { username: 'liam', passwordHash, favorites: [{ star1Id: 2963, star2Id: 6384 }] },
-    ]))
-    const result = addFavorite('liam', 31, 4724)
+  it('normalizes star ids to a consistent order regardless of input order', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult(undefined) // insert
+    queueResult([{ id: 1, userId: 1, star1Id: 2963, star2Id: 6384 }])
 
-    expect(result).toEqual([
-      { star1Id: 2963, star2Id: 6384 },
-      { star1Id: 31, star2Id: 4724 },
-    ])
+    await addFavorite('liam', 6384, 2963)
+
+    const inserted = db.insert.mock.results[0].value.valuesArgs
+    expect(inserted).toEqual({ userId: 1, star1Id: 2963, star2Id: 6384 })
   })
 
-  it('does not add a duplicate regardless of id order', () => {
-    readFileSync.mockReturnValue(JSON.stringify([
-      { username: 'liam', passwordHash, favorites: [{ star1Id: 2963, star2Id: 6384 }] },
-    ]))
-    const result = addFavorite('liam', 6384, 2963)
+  it('relies on onConflictDoNothing to avoid duplicates', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult(undefined) // insert (no-op on conflict)
+    queueResult([{ id: 1, userId: 1, star1Id: 2963, star2Id: 6384 }])
 
-    expect(result).toEqual([{ star1Id: 2963, star2Id: 6384 }])
+    await addFavorite('liam', 2963, 6384)
+
+    const insertNode = db.insert.mock.results[0].value
+    expect(insertNode.onConflictDoNothing).toHaveBeenCalled()
   })
 
-  it('throws when the user does not exist', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(() => addFavorite('someone-else', 2963, 6384)).toThrow('User not found')
-    expect(writeFileSync).not.toHaveBeenCalled()
+  it('throws when the user does not exist', async () => {
+    queueResult([])
+    await expect(addFavorite('someone-else', 2963, 6384)).rejects.toThrow('User not found')
+    expect(db.insert).not.toHaveBeenCalled()
   })
 })
 
 describe('removeFavorite', () => {
-  it('removes a matching favorite regardless of id order', () => {
-    readFileSync.mockReturnValue(JSON.stringify([
-      { username: 'liam', passwordHash, favorites: [{ star1Id: 2963, star2Id: 6384 }, { star1Id: 31, star2Id: 4724 }] },
-    ]))
-    const result = removeFavorite('liam', 6384, 2963)
+  it('removes a matching favorite regardless of id order', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult(undefined) // delete
+    queueResult([{ id: 2, userId: 1, star1Id: 31, star2Id: 4724 }])
 
+    const result = await removeFavorite('liam', 6384, 2963)
     expect(result).toEqual([{ star1Id: 31, star2Id: 4724 }])
   })
 
-  it('leaves the list unchanged when there is no match', () => {
-    readFileSync.mockReturnValue(JSON.stringify([
-      { username: 'liam', passwordHash, favorites: [{ star1Id: 2963, star2Id: 6384 }] },
-    ]))
-    const result = removeFavorite('liam', 31, 4724)
+  it('leaves the list unchanged when there is no match', async () => {
+    queueResult([{ id: 1, username: 'liam' }])
+    queueResult(undefined) // delete
+    queueResult([{ id: 1, userId: 1, star1Id: 2963, star2Id: 6384 }])
 
+    const result = await removeFavorite('liam', 31, 4724)
     expect(result).toEqual([{ star1Id: 2963, star2Id: 6384 }])
   })
 
-  it('throws when the user does not exist', () => {
-    readFileSync.mockReturnValue(JSON.stringify([{ username: 'liam', passwordHash }]))
-    expect(() => removeFavorite('someone-else', 2963, 6384)).toThrow('User not found')
-    expect(writeFileSync).not.toHaveBeenCalled()
+  it('throws when the user does not exist', async () => {
+    queueResult([])
+    await expect(removeFavorite('someone-else', 2963, 6384)).rejects.toThrow('User not found')
+    expect(db.delete).not.toHaveBeenCalled()
   })
 })
 

@@ -9,22 +9,33 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "vitest"
+    "test": "vitest",
+    "db:up": "docker compose up -d",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:import-users-json": "node server/scripts/migrate-users-json.js"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.7.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.19.2",
     "express-session": "^1.19.0",
+    "pg": "^8.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.18.0"
+    "react-hook-form": "^7.84.0",
+    "react-router-dom": "^7.18.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/pg": "^8.20.4",
     "@vitejs/plugin-react": "^4.3.1",
+    "drizzle-kit": "^0.31.10",
     "jsdom": "^29.1.1",
     "supertest": "^7.2.2",
     "vite": "^5.4.10",

@@ -63,25 +63,31 @@ describe('POST /api/signup', () => {
     expect(createUser).not.toHaveBeenCalled()
   })
 
+  it('returns 400 when the password has no special character', async () => {
+    const res = await request(app).post('/api/signup').send({ username: 'newuser', password: 'secretpw' })
+    expect(res.status).toBe(400)
+    expect(createUser).not.toHaveBeenCalled()
+  })
+
   it('creates the user, starts a session, and returns the username', async () => {
     createUser.mockImplementation(() => {})
-    const res = await request(app).post('/api/signup').send({ username: 'newuser', password: 'secret' })
+    const res = await request(app).post('/api/signup').send({ username: 'newuser', password: 'secret!' })
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ username: 'newuser' })
-    expect(createUser).toHaveBeenCalledWith('newuser', 'secret')
+    expect(createUser).toHaveBeenCalledWith('newuser', 'secret!')
   })
 
   it('logs the new user in immediately', async () => {
     createUser.mockImplementation(() => {})
     const agent = request.agent(app)
-    await agent.post('/api/signup').send({ username: 'newuser', password: 'secret' })
+    await agent.post('/api/signup').send({ username: 'newuser', password: 'secret!' })
     const res = await agent.get('/api/session')
     expect(res.body).toEqual({ authenticated: true, username: 'newuser' })
   })
 
   it('returns 409 when the username already exists', async () => {
     createUser.mockImplementation(() => { throw new Error('Username already exists') })
-    const res = await request(app).post('/api/signup').send({ username: 'liam', password: 'secret' })
+    const res = await request(app).post('/api/signup').send({ username: 'liam', password: 'secret!' })
     expect(res.status).toBe(409)
     expect(res.body).toEqual({ error: 'Username already exists' })
   })

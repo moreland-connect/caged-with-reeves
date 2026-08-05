@@ -11,6 +11,7 @@ The following must be installed on your machine before you begin:
 - **Node.js** v18 or higher — required for native `fetch` support ([nodejs.org](https://nodejs.org))
 - **npm** — included with Node.js
 - **TMDB API key** — a free Read Access Token from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). Use the long **API Read Access Token** (Bearer token), not the short API key.
+- **Docker** — used to run a local Postgres instance ([docker.com](https://www.docker.com/products/docker-desktop/))
 
 ## Setup
 
@@ -25,6 +26,7 @@ cp .env.example .env
 TMDB_API_KEY=your_bearer_token_here
 SESSION_SECRET=replace_with_a_random_string
 PORT=3001
+DATABASE_URL=postgres://caged:caged@localhost:5432/caged_with_reeves
 ```
 
 2. Install dependencies:
@@ -33,19 +35,14 @@ PORT=3001
 npm install
 ```
 
-3. Set up local login accounts. Copy the example accounts file:
+3. Start Postgres and run the migrations:
 
 ```bash
-cp server/users.example.json server/users.json
+npm run db:up      # starts a local Postgres container via Docker Compose
+npm run db:migrate # creates the users/favorites tables
 ```
 
-`server/users.json` is gitignored and is the entire user store — there's no signup approval flow beyond what `/signup` creates. Generate a bcrypt hash for a password with:
-
-```bash
-node server/scripts/hash-password.js <password>
-```
-
-Paste the result into `server/users.json` as `{ "username": "...", "passwordHash": "..." }`. Accounts can also be created directly through the app's sign-up page.
+Accounts are created directly through the app's sign-up page — there's no separate accounts file to edit. (If you have an old `server/users.json` from before the Postgres migration, `npm run db:import-users-json` will import those accounts and favorites into the database.)
 
 ## Running the App
 
@@ -78,7 +75,7 @@ All endpoints are served by the Express server on port `3001` (proxied through V
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/login` | Verifies a username/password against `server/users.json` and starts a session. |
+| `POST` | `/api/login` | Verifies a username/password against the `users` table and starts a session. |
 | `POST` | `/api/signup` | Creates a new account (`409` if the username is taken) and starts a session. |
 | `POST` | `/api/logout` | Destroys the current session. |
 | `GET` | `/api/session` | Returns `{ authenticated, username }` for the current session. |
@@ -138,7 +135,7 @@ Each star's filmography typically spans several hundred movies combined, meaning
 ### Auth
 
 - Sessions are held in-memory via `express-session` — restarting the server logs everyone out.
-- `server/users.json` is the entire user store; there's no external identity provider.
+- Accounts and favorites are stored in Postgres (`users`/`favorites` tables via Drizzle); there's no external identity provider.
 
 ### Other notes
 

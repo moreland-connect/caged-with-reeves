@@ -6,6 +6,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { findSharedActors, searchPersons, getPersonById } from './tmdb.js'
 import { verifyCredentials, createUser, getFavorites, addFavorite, removeFavorite, requireAuth } from './auth.js'
+import { newCredentialsSchema } from '../src/schemas/auth.js'
 
 // ESM has no __dirname
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -21,9 +22,9 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax' },
 }))
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body
-  if (!verifyCredentials(username, password)) {
+  if (!await verifyCredentials(username, password)) {
     return res.status(401).json({ error: 'Invalid username or password' })
   }
   req.session.regenerate((err) => {
@@ -33,13 +34,14 @@ app.post('/api/login', (req, res) => {
   })
 })
 
-app.post('/api/signup', (req, res) => {
-  const { username, password } = req.body
-  if (!username?.trim() || !password) {
-    return res.status(400).json({ error: 'Username and password are required' })
+app.post('/api/signup', async (req, res) => {
+  const parsed = newCredentialsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message })
   }
+  const { username, password } = parsed.data
   try {
-    createUser(username, password)
+    await createUser(username, password)
   } catch (err) {
     return res.status(409).json({ error: err.message })
   }
@@ -98,26 +100,26 @@ app.get('/api/shared-actors', requireAuth, async (req, res) => {
   }
 })
 
-app.get('/api/favorites', requireAuth, (req, res) => {
-  res.json({ favorites: getFavorites(req.session.user) })
+app.get('/api/favorites', requireAuth, async (req, res) => {
+  res.json({ favorites: await getFavorites(req.session.user) })
 })
 
-app.post('/api/favorites', requireAuth, (req, res) => {
+app.post('/api/favorites', requireAuth, async (req, res) => {
   const star1Id = Number(req.body.star1Id)
   const star2Id = Number(req.body.star2Id)
   if (!star1Id || !star2Id || star1Id === star2Id) {
     return res.status(400).json({ error: 'star1Id and star2Id are required and must be different' })
   }
-  res.json({ favorites: addFavorite(req.session.user, star1Id, star2Id) })
+  res.json({ favorites: await addFavorite(req.session.user, star1Id, star2Id) })
 })
 
-app.delete('/api/favorites', requireAuth, (req, res) => {
+app.delete('/api/favorites', requireAuth, async (req, res) => {
   const star1Id = Number(req.query.star1Id)
   const star2Id = Number(req.query.star2Id)
   if (!star1Id || !star2Id) {
     return res.status(400).json({ error: 'star1Id and star2Id are required' })
   }
-  res.json({ favorites: removeFavorite(req.session.user, star1Id, star2Id) })
+  res.json({ favorites: await removeFavorite(req.session.user, star1Id, star2Id) })
 })
 
 if (process.env.NODE_ENV === 'production') {

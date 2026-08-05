@@ -12,23 +12,6 @@ A React app that finds actors who have appeared in films with **any two chosen a
 - All routes must be defined in separate files, organized under a `/routes` folder
 - When creating a new route, create a new file in `/routes` rather than adding to an existing one unless it clearly belongs there
 
-## Setup
-
-Copy `.env.example` to `.env` and add your TMDB Bearer token as `TMDB_API_KEY`, a `SESSION_SECRET` (any random string), and optionally a `PORT` (default 3001).
-
-Local login accounts live in `server/users.json` (gitignored — copy `server/users.example.json` to get started). Generate a bcrypt hash for each account's password with `node server/scripts/hash-password.js <password>` and paste the result into `users.json` as `{ "username": "...", "passwordHash": "..." }`.
-
-## Commands
-
-```bash
-npm run dev:server  # Start Express API server (port 3001, --watch)
-npm run dev         # Start Vite dev server (port 5173, proxies /api to :3001)
-npm run build       # Production build (Vite → dist/)
-npm start           # Production: Express serves dist/ + API on one port
-npm run preview     # Preview production build locally
-```
-
-Run `dev:server` and `dev` in separate terminals for local development. No test suite or linter is configured.
 
 ## Architecture
 
@@ -36,14 +19,18 @@ Run `dev:server` and `dev` in separate terminals for local development. No test 
 
 - `server/index.js` — Express app with three TMDB routes plus auth routes, CORS enabled for dev, serves `dist/` in production
 - `server/tmdb.js` — all TMDB API logic; `TMDB_API_KEY` never leaves the server
-- `server/auth.js` — local username/password verification (`verifyCredentials`, bcrypt-checked against `server/users.json`), account creation (`createUser`), per-account favorites list storage (`getFavorites`/`addFavorite`/`removeFavorite`, order-independent dedupe), and the `requireAuth` session-gate middleware
-- `server/users.json` — gitignored local account list; each entry is `{ username, passwordHash, favorites? }` where `favorites` is an array of `{ star1Id, star2Id }`; see Setup above
+- `server/auth.js` — local username/password verification (`verifyCredentials`, bcrypt-checked against the Postgres `users` table), account creation (`createUser`), per-account favorites storage (`getFavorites`/`addFavorite`/`removeFavorite`, order-independent dedupe via normalized `star1Id <= star2Id` storage + a DB unique constraint), and the `requireAuth` session-gate middleware. All exported functions are async.
+- `server/db/schema.js` — Drizzle schema: `users` (`id`, `username` unique, `passwordHash`) and `favorites` (`id`, `userId` FK → `users.id` cascade delete, `star1Id`, `star2Id`, unique on `(userId, star1Id, star2Id)`)
+- `server/db/client.js` — creates the `pg` `Pool` and exports the Drizzle `db` instance, driven by `DATABASE_URL`
+- `server/db/migrations/` — generated SQL migrations (via `npm run db:generate`), applied with `npm run db:migrate`
+- `docker-compose.yml` — local Postgres service for development (`npm run db:up`)
+- `server/scripts/migrate-users-json.js` — one-off script (`npm run db:import-users-json`) that imports a legacy `server/users.json` into Postgres, skipping usernames that already exist
 
 **API endpoints:**
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/login` | Verifies credentials against `users.json`, starts a session |
+| `POST /api/login` | Verifies credentials against the `users` table, starts a session |
 | `POST /api/signup` | Creates a new account (409 if the username is taken), starts a session |
 | `POST /api/logout` | Destroys the session |
 | `GET /api/session` | Returns `{ authenticated, username }` for the current session |
@@ -100,7 +87,7 @@ Run `dev:server` and `dev` in separate terminals for local development. No test 
 - The two stars are **not hardcoded** — users can search any two actors via `ActorSearch`
 - Cage + Reeves are the default example but any pair works; results URLs are shareable (`/results?star1=ID&star2=ID`)
 - TMDB API key is **server-side only** — not exposed to the browser
-- Auth is a local username/password gate only — no remote identity provider, sessions are in-memory (server restart logs everyone out), and `server/users.json` is the entire user store
+- Auth is a local username/password gate only — no remote identity provider, sessions are in-memory (server restart logs everyone out), and Postgres (`users`/`favorites` tables via Drizzle) is the entire account store
 - No state management library; all state lives in the route components via React hooks (except auth state, which lives in `AuthContext`)
 - Client-side result cache: revisiting the same pair within a session skips the SSE pipeline entirely
 
